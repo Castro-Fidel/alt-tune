@@ -23,36 +23,38 @@ print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
 print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
 print_not_used () { printf "\E[35m%s $@ %s\e[0m\n" ;}
 
-PLUGINS_TO_GUI=""
-touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
-for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
-    for GREP_PLUGINS in "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/"* ; do
-        . "${GREP_PLUGINS}"
-        if at_plugin_check ; then
-            BOOL_IN_PLUGINS=TRUE
-            echo "${GREP_PLUGINS}" >> "${AT_TMP_PATH}/skip_plugins"
-            echo -e "$(basename ${GREP_PLUGINS}) $(print_in_use '[ In use ]')\n${AT_PLUGIN_INFO}\n${AT_LINE_SEPARATOR}" >> "${AT_TMP_PATH}/list_plugins"
-        else
-            BOOL_IN_PLUGINS=FALSE
-            echo -e "$(basename ${GREP_PLUGINS}) $(print_not_used '[ Not used ]')\n${AT_PLUGIN_INFO}\n${AT_LINE_SEPARATOR}" >> "${AT_TMP_PATH}/list_plugins"
-        fi
-        eval PLUGINS_${GREP_PLUGINS_PATH}_TO_GUI+="\"$BOOL_IN_PLUGINS| $AT_PLUGIN_NAME |$AT_PLUGIN_INFO |"\"
+check_plugins () {
+    PLUGINS_TO_GUI=""
+    touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
+    for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
+        for GREP_PLUGINS in "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/"* ; do
+            . "${GREP_PLUGINS}"
+            if at_plugin_check ; then
+                BOOL_IN_PLUGINS=TRUE
+                echo "${GREP_PLUGINS}" >> "${AT_TMP_PATH}/skip_plugins"
+                echo -e "$(basename ${GREP_PLUGINS}) $(print_in_use '[ In use ]')\n${AT_PLUGIN_INFO}\n${AT_LINE_SEPARATOR}" 1>> "${AT_TMP_PATH}/list_plugins"
+            else
+                BOOL_IN_PLUGINS=FALSE
+                echo -e "$(basename ${GREP_PLUGINS}) $(print_not_used '[ Not used ]')\n${AT_PLUGIN_INFO}\n${AT_LINE_SEPARATOR}" 1>> "${AT_TMP_PATH}/list_plugins"
+            fi
+            eval PLUGINS_${GREP_PLUGINS_PATH}_TO_GUI+="\"$BOOL_IN_PLUGINS| $AT_PLUGIN_NAME |$AT_PLUGIN_INFO |"\"
+        done
     done
-done
+}
 
 use_from_gui () {
     old_IFS=$IFS && IFS=$'|'
     "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=1 --list --checklist --search-column=3\
                 --separator='|' --column "Set" --column "Settings" --column  "Info" \
-                $PLUGINS_FOR_GAMES_TO_GUI >> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+                $PLUGINS_FOR_GAMES_TO_GUI 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
 
     "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=2 --list --checklist --search-column=3\
                 --separator='|' --column "Set" --column "Settings" --column  "Info" \
-                $PLUGINS_AMD_TO_GUI >> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+                $PLUGINS_AMD_TO_GUI 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
 
     "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=3 --list --checklist --search-column=3\
                 --separator='|' --column "Set" --column "Settings" --column  "Info" \
-                $PLUGINS_NVIDIA_TO_GUI >> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+                $PLUGINS_NVIDIA_TO_GUI 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
 
     "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 --title "Alt Tune" \
                 --window-icon="${AT_ICON}" --tab-pos=left \
@@ -64,41 +66,75 @@ use_from_gui () {
     AT_PLUGINS=""
     while read GET_PLUGINS ; do
         DEL_BOOLEAN="$(echo ${GET_PLUGINS} | awk -F'|' '{print $2}'| awk '{print $1}' )"
-        if ! grep "$DEL_BOOLEAN" "${AT_TMP_PATH}/skip_plugins" &>/dev/null ; then
-            AT_PLUGINS+="$DEL_BOOLEAN "
+        if ! grep "${DEL_BOOLEAN}" "${AT_TMP_PATH}/skip_plugins" &>/dev/null ; then
+            AT_PLUGINS+="${DEL_BOOLEAN} "
         fi
     done < "${AT_TMP_PATH}/plugins"
-    rm -r "${AT_TMP_PATH}"
 
-    if [[ -z "$AT_PLUGINS" ]] ; then
+    AT_PLUGINS_TO_DEFAULT=""
+    while read SKIP_PLUGINS ; do
+        PLUGINS_SK="$(basename ${SKIP_PLUGINS})"
+        if ! grep "${PLUGINS_SK}" "${AT_TMP_PATH}/plugins" &>/dev/null ; then
+            AT_PLUGINS_TO_DEFAULT+="${PLUGINS_SK} "
+        fi
+    done < "${AT_TMP_PATH}/skip_plugins"
+
+    if [[ -z "${AT_PLUGINS}" ]] && [[ -z "${AT_PLUGINS_TO_DEFAULT}" ]] ; then
         echo "Nothing to do... Exit."
-    else
-        for START_AT_FUNCTIONS in $AT_PLUGINS ; do
-            . "$(find "${AT_PLUGINS_PATH}" -name ^"${START_AT_FUNCTIONS}"$)"
-            at_plugin_function && echo "Applide: ${START_AT_FUNCTIONS}"
+        exit 0
+    fi
+
+    if [[ -n "${AT_PLUGINS}" ]] ; then
+        for START_AT_FUNCTIONS in ${AT_PLUGINS} ; do
+            . "$(find "${AT_PLUGINS_PATH}" -type f -name "${START_AT_FUNCTIONS}")"
+            at_plugin_function && print_not_used "Applide: ${START_AT_FUNCTIONS}... OK."
+        done
+        echo "Done."
+    fi
+
+    if [[ -n "${AT_PLUGINS_TO_DEFAULT}" ]] ; then
+        for RESTART_AT_FUNCTIONS in ${AT_PLUGINS_TO_DEFAULT} ; do
+            . "$(find "${AT_PLUGINS_PATH}" -type f -name "${RESTART_AT_FUNCTIONS}")"
+            at_plugin_restore_to_default && print_in_use "Restore to default: ${RESTART_AT_FUNCTIONS}... OK."
         done
         echo "Done."
     fi
 }
 
 list_plugins () {
-    echo -e "\nUse: alt-tune <command>\n${AT_LINE_SEPARATOR}"
+    echo -e "\nUse: alt-tune <command>\nOr: alt-tune -r <command> for restore default settings.\n${AT_LINE_SEPARATOR}"
     cat "${AT_TMP_PATH}/list_plugins"
 }
 
 cli_alt_tune () {
-    if grep -E ^"$1 " "${AT_TMP_PATH}/list_plugins" &>/dev/null ; then
-        . "$(find "${AT_PLUGINS_PATH}" -name "$1")"
+    if grep -E /"$1"$ "${AT_TMP_PATH}/skip_plugins" ; then
+        echo "$1 in used."
+    elif grep -E ^"$1 " "${AT_TMP_PATH}/list_plugins" &>/dev/null ; then
+        . "$(find "${AT_PLUGINS_PATH}" -type f -name "$1")"
         at_plugin_function && echo "Applide: $1... OK." && exit 0 || exit 1
     else
-        echo "Unknown command: $1" && exit 1
+        print_warn "Unknown command: $1" && exit 1
     fi
 }
+
+at_def_restore () {
+    if grep -E /"$1"$ "${AT_TMP_PATH}/skip_plugins" ; then
+        . "$(find "${AT_PLUGINS_PATH}" -type f -name "$1")"
+        at_plugin_restore_to_default && echo "Restore to default: $1... OK." && exit 0 || exit 1
+    else
+        echo "Nothing to do for: $1."
+    fi
+}
+
+###MAIN###
+check_plugins
 
 case "$1" in
     --gui|gui) use_from_gui ;;
     --list|list|-l|l|--help|help|-h|h) list_plugins ;;
+    --default|default|--restore|restore|-r|r) at_def_restore "$2" ;;
     *) [[ -n "$1" ]] && cli_alt_tune "$1" || use_from_gui ;;
 esac
 
+rm -r "${AT_TMP_PATH}"
 exit 0

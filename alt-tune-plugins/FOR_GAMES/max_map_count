@@ -9,7 +9,9 @@ at_plugin_check () {
 }
 
 at_plugin_function () {
-    sysctl -w vm.max_map_count=2147483642
-    echo "2147483642" > /proc/sys/vm/max_map_count
-    return 0
+    sysctl -w vm.max_map_count=2147483642 && return 0 || return 1
+}
+
+at_plugin_restore_to_default () {
+    sysctl -w vm.max_map_count=65530 && return 0 || return 1
 }

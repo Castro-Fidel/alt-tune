@@ -16,3 +16,12 @@ at_plugin_function () {
         return 1
     fi
 }
+
+at_plugin_restore_to_default () {
+    if sed -i 's/mitigations=off //' /etc/default/grub ; then
+        update-grub
+        return 0
+    else
+        return 1
+    fi
+}

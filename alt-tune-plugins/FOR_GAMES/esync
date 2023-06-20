@@ -16,3 +16,7 @@ at_plugin_function () {
 EOF
 [ "$?" == 0 ] && return 0 || return 1
 }
+
+at_plugin_restore_to_default () {
+    rm /etc/security/limits.d/99-esync.conf && return 0 || return 1
+}
