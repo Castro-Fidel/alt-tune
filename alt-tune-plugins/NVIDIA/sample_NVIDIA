@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+AT_PLUGIN_NAME="sample_NVIDIA"
+AT_PLUGIN_INFO="Пример"
+
+at_plugin_check () {
+    return 1
+}
+
+at_plugin_function () {
+    return 0
+}

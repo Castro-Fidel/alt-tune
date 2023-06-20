@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+AT_PLUGIN_NAME="max_map_count"
+AT_PLUGIN_INFO="Уменьшить ограничения mmap операционной системы.
+Необходимо для некоторых игр. (значение взято из SteamOS)"
+
+at_plugin_check () {
+    grep "2147483642" /proc/sys/vm/max_map_count &>/dev/null && return 0 || return 1
+}
+
+at_plugin_function () {
+    sysctl -w vm.max_map_count=2147483642
+    echo "2147483642" > /proc/sys/vm/max_map_count
+    return 0
+}

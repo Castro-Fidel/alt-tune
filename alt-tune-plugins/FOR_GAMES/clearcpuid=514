@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+AT_PLUGIN_NAME="clearcpuid=514"
+AT_PLUGIN_INFO="Отключить поддержку UMIP. (Необходимо для запуска некоторых игр,
+таких как Overwatch и Hogwards Legacy на процессорах Ryzen 3xxx и выше)"
+
+at_plugin_check () {
+    grep "clearcpuid=514" /etc/default/grub &>/dev/null && return 0 || return 1
+}
+
+at_plugin_function () {
+    if sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="clearcpuid=514 /' /etc/default/grub ; then
+        update-grub
+        return 0
+    else
+        return 1
+    fi
+}

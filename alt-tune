@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+[[ -z "$(which yad)" ]] && echo 'You need to intsall "yad" in your system.' && exit 1
+[[ "$(id -u)" -ne 0 ]] && echo 'This script must be run as root!' && exit 1
+
+#fix for wayland
+export NO_AT_BRIDGE=1
+export GDK_BACKEND="x11"
+
+# change GTK theme
+# export GTK_THEME="Adwaita:dark"
+
+AT_SCRIPTS_PATH="$(dirname $(readlink -f "$0"))"
+AT_YAD=yad
+AT_RANDOM="${RANDOM}"
+AT_TMP_PATH="/tmp/alt-tune-tmp-${AT_RANDOM}"
+AT_PLUGINS_PATH="${AT_SCRIPTS_PATH}/alt-tune-plugins"
+AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
+
+mkdir -p "${AT_TMP_PATH}"
+
+PLUGINS_TO_GUI=""
+touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
+for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
+    for GREP_PLUGINS in "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/"* ; do
+        . "${GREP_PLUGINS}"
+        if at_plugin_check ; then
+            BOOL_IN_PLUGINS=TRUE
+            echo "${GREP_PLUGINS}" >> "${AT_TMP_PATH}/skip_plugins"
+            echo -e "$(basename ${GREP_PLUGINS}) [ In use ]\n($AT_PLUGIN_INFO)\n" >> "${AT_TMP_PATH}/list_plugins"
+        else
+            BOOL_IN_PLUGINS=FALSE
+            echo -e "$(basename ${GREP_PLUGINS}) [ Not used ]\n($AT_PLUGIN_INFO)\n" >> "${AT_TMP_PATH}/list_plugins"
+        fi
+        eval PLUGINS_${GREP_PLUGINS_PATH}_TO_GUI+="\"$BOOL_IN_PLUGINS| $AT_PLUGIN_NAME |$AT_PLUGIN_INFO |"\"
+    done
+done
+
+use_from_gui () {
+    old_IFS=$IFS && IFS=$'|'
+    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=1 --list --checklist --search-column=3\
+                --separator='|' --column "Set" --column "Settings" --column  "Info" \
+                $PLUGINS_FOR_GAMES_TO_GUI >> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+
+    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=2 --list --checklist --search-column=3\
+                --separator='|' --column "Set" --column "Settings" --column  "Info" \
+                $PLUGINS_AMD_TO_GUI >> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+
+    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=3 --list --checklist --search-column=3\
+                --separator='|' --column "Set" --column "Settings" --column  "Info" \
+                $PLUGINS_NVIDIA_TO_GUI >> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+
+    "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 --title "Alt Tune" \
+                --window-icon="${AT_ICON}" --tab-pos=left \
+                --tab="    FOR GAMES    " --tab="AMD" --tab="NVIDIA" 2>/dev/null
+    YAD_STATUS="$?"
+    IFS=${old_IFS}
+    [[ "$YAD_STATUS" == "1" || "$YAD_STATUS" == "252" ]] && exit 0
+
+    AT_PLUGINS=""
+    while read GET_PLUGINS ; do
+        DEL_BOOLEAN="$(echo ${GET_PLUGINS} | awk -F'|' '{print $2}'| awk '{print $1}' )"
+        if ! grep "$DEL_BOOLEAN" "${AT_TMP_PATH}/skip_plugins" &>/dev/null ; then
+            AT_PLUGINS+="$DEL_BOOLEAN "
+        fi
+    done < "${AT_TMP_PATH}/plugins"
+    rm -r "${AT_TMP_PATH}"
+
+    if [[ -z "$AT_PLUGINS" ]] ; then
+        echo "Nothing to do... Exit."
+    else
+        for START_AT_FUNCTIONS in $AT_PLUGINS ; do
+            . "$(find "${AT_PLUGINS_PATH}" -name "${START_AT_FUNCTIONS}")"
+            at_plugin_function && echo "Applide: ${START_AT_FUNCTIONS}"
+        done
+        echo "Done."
+    fi
+}
+
+list_plugins () {
+    cat "${AT_TMP_PATH}/list_plugins"
+}
+
+cli_alt_tune () {
+    if grep -E ^"$1 " "${AT_TMP_PATH}/list_plugins" &>/dev/null ; then
+        . "$(find "${AT_PLUGINS_PATH}" -name "$1")"
+        at_plugin_function && echo "Applide: $1" && exit 0 || exit 1
+    else
+        echo "Unknown command: $1" && exit 1
+    fi
+}
+
+case "$1" in
+    --gui|gui) use_from_gui ;;
+    --list|list|-l|l|--help|help|-h|h) list_plugins ;;
+    *) [[ -n "$1" ]] && cli_alt_tune "$1" || use_from_gui ;;
+esac
+
+exit 0

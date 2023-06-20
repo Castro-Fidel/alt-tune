@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+AT_PLUGIN_NAME="mitigations=off"
+AT_PLUGIN_INFO="Отключить защиту ядра от вредоносных программ,
+таких как Spectre и Meltdown. (На свой страх и риск!!!)"
+
+at_plugin_check () {
+    grep "mitigations=off" /etc/default/grub &>/dev/null && return 0 || return 1
+}
+
+at_plugin_function () {
+    if sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="mitigations=off /' /etc/default/grub ; then
+        update-grub
+        return 0
+    else
+        return 1
+    fi
+}
