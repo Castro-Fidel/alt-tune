@@ -15,6 +15,7 @@ AT_RANDOM="${RANDOM}"
 AT_TMP_PATH="/tmp/alt-tune-tmp-${AT_RANDOM}"
 AT_PLUGINS_PATH="${AT_SCRIPTS_PATH}/alt-tune-plugins"
 AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
+AT_LINE_SEPARATOR="------------------------------------------------------------------------"
 
 mkdir -p "${AT_TMP_PATH}"
 
@@ -30,10 +31,10 @@ for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
         if at_plugin_check ; then
             BOOL_IN_PLUGINS=TRUE
             echo "${GREP_PLUGINS}" >> "${AT_TMP_PATH}/skip_plugins"
-            echo -e "$(basename ${GREP_PLUGINS}) $(print_in_use '[ In use ]')\n${AT_PLUGIN_INFO}\n" >> "${AT_TMP_PATH}/list_plugins"
+            echo -e "$(basename ${GREP_PLUGINS}) $(print_in_use '[ In use ]')\n${AT_PLUGIN_INFO}\n${AT_LINE_SEPARATOR}" >> "${AT_TMP_PATH}/list_plugins"
         else
             BOOL_IN_PLUGINS=FALSE
-            echo -e "$(basename ${GREP_PLUGINS}) $(print_not_used '[ Not used ]')\n${AT_PLUGIN_INFO}\n" >> "${AT_TMP_PATH}/list_plugins"
+            echo -e "$(basename ${GREP_PLUGINS}) $(print_not_used '[ Not used ]')\n${AT_PLUGIN_INFO}\n${AT_LINE_SEPARATOR}" >> "${AT_TMP_PATH}/list_plugins"
         fi
         eval PLUGINS_${GREP_PLUGINS_PATH}_TO_GUI+="\"$BOOL_IN_PLUGINS| $AT_PLUGIN_NAME |$AT_PLUGIN_INFO |"\"
     done
@@ -81,7 +82,7 @@ use_from_gui () {
 }
 
 list_plugins () {
-    echo -e "\nUse: alt-tune <command>\n"
+    echo -e "\nUse: alt-tune <command>\n${AT_LINE_SEPARATOR}"
     cat "${AT_TMP_PATH}/list_plugins"
 }
 
