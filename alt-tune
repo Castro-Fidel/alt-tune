@@ -18,6 +18,10 @@ AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
 
 mkdir -p "${AT_TMP_PATH}"
 
+print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
+print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
+print_not_used () { printf "\E[35m%s $@ %s\e[0m\n" ;}
+
 PLUGINS_TO_GUI=""
 touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
 for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
@@ -26,10 +30,10 @@ for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
         if at_plugin_check ; then
             BOOL_IN_PLUGINS=TRUE
             echo "${GREP_PLUGINS}" >> "${AT_TMP_PATH}/skip_plugins"
-            echo -e "$(basename ${GREP_PLUGINS}) [ In use ]\n($AT_PLUGIN_INFO)\n" >> "${AT_TMP_PATH}/list_plugins"
+            echo -e "$(basename ${GREP_PLUGINS}) $(print_in_use '[ In use ]')\n${AT_PLUGIN_INFO}\n" >> "${AT_TMP_PATH}/list_plugins"
         else
             BOOL_IN_PLUGINS=FALSE
-            echo -e "$(basename ${GREP_PLUGINS}) [ Not used ]\n($AT_PLUGIN_INFO)\n" >> "${AT_TMP_PATH}/list_plugins"
+            echo -e "$(basename ${GREP_PLUGINS}) $(print_not_used '[ Not used ]')\n${AT_PLUGIN_INFO}\n" >> "${AT_TMP_PATH}/list_plugins"
         fi
         eval PLUGINS_${GREP_PLUGINS_PATH}_TO_GUI+="\"$BOOL_IN_PLUGINS| $AT_PLUGIN_NAME |$AT_PLUGIN_INFO |"\"
     done
@@ -69,7 +73,7 @@ use_from_gui () {
         echo "Nothing to do... Exit."
     else
         for START_AT_FUNCTIONS in $AT_PLUGINS ; do
-            . "$(find "${AT_PLUGINS_PATH}" -name "${START_AT_FUNCTIONS}")"
+            . "$(find "${AT_PLUGINS_PATH}" -name ^"${START_AT_FUNCTIONS}"$)"
             at_plugin_function && echo "Applide: ${START_AT_FUNCTIONS}"
         done
         echo "Done."
@@ -77,13 +81,14 @@ use_from_gui () {
 }
 
 list_plugins () {
+    echo -e "\nUse: alt-tune <command>\n"
     cat "${AT_TMP_PATH}/list_plugins"
 }
 
 cli_alt_tune () {
     if grep -E ^"$1 " "${AT_TMP_PATH}/list_plugins" &>/dev/null ; then
         . "$(find "${AT_PLUGINS_PATH}" -name "$1")"
-        at_plugin_function && echo "Applide: $1" && exit 0 || exit 1
+        at_plugin_function && echo "Applide: $1... OK." && exit 0 || exit 1
     else
         echo "Unknown command: $1" && exit 1
     fi
