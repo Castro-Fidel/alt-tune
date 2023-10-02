@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+AT_PLUGIN_NAME="kde"
+AT_PLUGIN_INFO="Поддержка онлайн обновления тем в KDE"
+
+at_plugin_check () {
+    grep "ghns=true" /etc/kf5/xdg/kdeglobals &>/dev/null && return 0 || return 1
+}
+
+at_plugin_function () {
+    sed -i 's/ghns=false/ghns=true/' /etc/kf5/xdg/kdeglobals
+}
+
+at_plugin_restore_to_default () {
+    sed -i 's/ghns=true/ghns=false/' /etc/kf5/xdg/kdeglobals
+}

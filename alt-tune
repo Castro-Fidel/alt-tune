@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-[[ -z "$(which yad)" ]] && echo 'You need to intsall "yad" in your system.' && exit 1
 [[ "$(id -u)" -ne 0 ]] && echo 'This script must be run as root!' && exit 1
 
 #fix for wayland
@@ -43,6 +42,8 @@ check_plugins () {
 }
 
 use_from_gui () {
+    [[ -z "$(which yad)" ]] && echo 'You need to intsall "yad" in your system.' && exit 1
+
     old_IFS=$IFS && IFS=$'|'
     "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=1 --list --checklist --search-column=3\
                 --separator='|' --column "Set" --column "Settings" --column  "Info" \
@@ -111,7 +112,7 @@ cli_alt_tune () {
         echo "$1 in used."
     elif grep -E ^"$1 " "${AT_TMP_PATH}/list_plugins" &>/dev/null ; then
         . "$(find "${AT_PLUGINS_PATH}" -type f -name "$1")"
-        at_plugin_function && echo "Applide: $1... OK." && exit 0 || exit 1
+        at_plugin_function && print_not_used "Applide: $1... OK." && exit 0 || exit 1
     else
         print_warn "Unknown command: $1" && exit 1
     fi
@@ -120,7 +121,7 @@ cli_alt_tune () {
 at_def_restore () {
     if grep -E /"$1"$ "${AT_TMP_PATH}/skip_plugins" ; then
         . "$(find "${AT_PLUGINS_PATH}" -type f -name "$1")"
-        at_plugin_restore_to_default && echo "Restore to default: $1... OK." && exit 0 || exit 1
+        at_plugin_restore_to_default && print_in_use "Restore to default: $1... OK." && exit 0 || exit 1
     else
         echo "Nothing to do for: $1."
     fi
