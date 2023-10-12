@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-AT_PLUGIN_NAME="kde"
-AT_PLUGIN_INFO="Поддержка онлайн обновления тем в KDE"
+AT_PLUGIN_NAME="KDE theme"
+AT_PLUGIN_INFO="Включить поддержку онлайн обновления тем в KDE"
 
 at_plugin_check () {
     grep "ghns=true" /etc/kf5/xdg/kdeglobals &>/dev/null && return 0 || return 1

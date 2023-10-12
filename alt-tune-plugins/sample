@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+AT_PLUGIN_NAME="Имя плагина"
+AT_PLUGIN_INFO="Пример описания"
+
+at_plugin_check () {
+    # Если изменения уже в системе, то return 0 иначе return 1
+}
+
+at_plugin_function () {
+    # команды для применения изменений
+}
+
+at_plugin_restore_to_default () {
+    # команды для отмены изменений
+}

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 [[ "$(id -u)" -ne 0 ]] && echo 'This script must be run as root!' && exit 1
 
+AT_TMP_PATH=$(mktemp -d)
+cleanup() {
+    # echo "Removing the temporary directory: $AT_TMP_PATH"
+    rm -rf "$AT_TMP_PATH"
+}
+trap "cleanup" EXIT
+
 #fix for wayland
 export NO_AT_BRIDGE=1
 export GDK_BACKEND="x11"
@@ -9,14 +16,12 @@ export GDK_BACKEND="x11"
 # export GTK_THEME="Adwaita:dark"
 
 AT_SCRIPTS_PATH="$(dirname $(readlink -f "$0"))"
-AT_YAD=yad
-AT_RANDOM="${RANDOM}"
-AT_TMP_PATH="/tmp/alt-tune-tmp-${AT_RANDOM}"
 AT_PLUGINS_PATH="${AT_SCRIPTS_PATH}/alt-tune-plugins"
 AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
+AT_YAD=yad
+AT_RANDOM="${RANDOM}"
 AT_LINE_SEPARATOR="------------------------------------------------------------------------"
-
-mkdir -p "${AT_TMP_PATH}"
+AT_SORT_TAB=('FOR_GAMES' 'AMD' 'NVIDIA' 'KDE')
 
 print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
 print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
@@ -26,6 +31,8 @@ check_plugins () {
     PLUGINS_TO_GUI=""
     touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
     for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
+        [[ ! -d "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}" ]] && continue
+        [[ -z "$(ls "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/")" ]] && continue
         for GREP_PLUGINS in "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/"* ; do
             . "${GREP_PLUGINS}"
             if at_plugin_check ; then
@@ -43,23 +50,19 @@ check_plugins () {
 
 use_from_gui () {
     [[ -z "$(which yad)" ]] && echo 'You need to intsall "yad" in your system.' && exit 1
-
     old_IFS=$IFS && IFS=$'|'
-    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=1 --list --checklist --search-column=3\
-                --separator='|' --column "Set" --column "Settings" --column  "Info" \
-                $PLUGINS_FOR_GAMES_TO_GUI 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+    local tab_count=0
+    for ptab in ${AT_SORT_TAB[@]} ; do
+        local AT_TAB[$tab_count]="--tab=$(echo $ptab | sed 's/_/ /')"
+        ((tab_count++))
+        PLUGINS_FOR_TO_GUI=PLUGINS_${ptab}_TO_GUI
+        "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
+                    --separator='|' --column "Set" --column "Settings" --column  "Info" \
+                    ${!PLUGINS_FOR_TO_GUI} 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
+    done
 
-    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=2 --list --checklist --search-column=3\
-                --separator='|' --column "Set" --column "Settings" --column  "Info" \
-                $PLUGINS_AMD_TO_GUI 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
-
-    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=3 --list --checklist --search-column=3\
-                --separator='|' --column "Set" --column "Settings" --column  "Info" \
-                $PLUGINS_NVIDIA_TO_GUI 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
-
-    "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 --title "Alt Tune" \
-                --window-icon="${AT_ICON}" --tab-pos=left \
-                --tab="    FOR GAMES    " --tab="AMD" --tab="NVIDIA" 2>/dev/null
+    "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 \
+                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=left ${AT_TAB[@]} 2>/dev/null
     YAD_STATUS="$?"
     IFS=${old_IFS}
     [[ "$YAD_STATUS" == "1" || "$YAD_STATUS" == "252" ]] && exit 0
@@ -137,5 +140,4 @@ case "$1" in
     *) [[ -n "$1" ]] && cli_alt_tune "$1" || use_from_gui ;;
 esac
 
-rm -r "${AT_TMP_PATH}"
 exit 0
