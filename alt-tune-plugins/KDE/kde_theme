@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-AT_PLUGIN_NAME="KDE theme"
+AT_PLUGIN_NAME="kde_theme"
 AT_PLUGIN_INFO="Включить поддержку онлайн обновления тем в KDE"
 
 at_plugin_check () {

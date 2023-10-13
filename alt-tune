@@ -15,6 +15,9 @@ export GDK_BACKEND="x11"
 # change GTK theme
 # export GTK_THEME="Adwaita:dark"
 
+# USE_EPMP=1 включает дополнительные вкладки для установки приложений с помощью epm play, если установлен eepm
+USE_EPMP=1
+
 AT_SCRIPTS_PATH="$(dirname $(readlink -f "$0"))"
 AT_PLUGINS_PATH="${AT_SCRIPTS_PATH}/alt-tune-plugins"
 AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
@@ -26,6 +29,29 @@ AT_SORT_TAB=('FOR_GAMES' 'AMD' 'NVIDIA' 'KDE')
 print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
 print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
 print_not_used () { printf "\E[35m%s $@ %s\e[0m\n" ;}
+
+check_epm_play_app () {
+    echo "Check available epm play applications..."
+    epmp </dev/null 1> "${AT_TMP_PATH}/available_app"
+    echo -e "Done.\nCheck installed epm play applications..."
+    epmp --list --short </dev/null 1> "${AT_TMP_PATH}/installed_app"
+    echo "Done."
+
+    while read BOOL_IN_LIST ; do
+    if [[ ! $(echo "$BOOL_IN_LIST" | grep "Available applications") ]] ; then
+        if [[ $(grep $(echo "$BOOL_IN_LIST" | awk -F' - ' '{print $1}') "${AT_TMP_PATH}/installed_app") ]]
+        then SET_BOOLEAN="TRUE"
+        else SET_BOOLEAN="FALSE"
+        fi
+        echo -en "$SET_BOOLEAN|$(echo "$BOOL_IN_LIST" | awk -F' - ' '{print $1}')|$(echo "$BOOL_IN_LIST" | awk -F' - ' '{print $2 $3 $4}')|" >> "${AT_TMP_PATH}/available_app_tmp"
+    fi
+    done < "${AT_TMP_PATH}/available_app"
+
+    touch "${AT_TMP_PATH}/installed_app_tmp"
+    while read BOOL_IN_LIST ; do
+        echo -en "FALSE|$BOOL_IN_LIST|" >> "${AT_TMP_PATH}/installed_app_tmp"
+    done < "${AT_TMP_PATH}/installed_app"
+}
 
 check_plugins () {
     PLUGINS_TO_GUI=""
@@ -53,7 +79,7 @@ use_from_gui () {
     old_IFS=$IFS && IFS=$'|'
     local tab_count=0
     for ptab in ${AT_SORT_TAB[@]} ; do
-        local AT_TAB[$tab_count]="--tab=$(echo $ptab | sed 's/_/ /')"
+        local AT_TAB[$tab_count]="--tab=   $(echo $ptab | sed 's/_/ /')   !settings"
         ((tab_count++))
         PLUGINS_FOR_TO_GUI=PLUGINS_${ptab}_TO_GUI
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
@@ -61,48 +87,82 @@ use_from_gui () {
                     ${!PLUGINS_FOR_TO_GUI} 1>> "${AT_TMP_PATH}/plugins" 2>/dev/null &
     done
 
+    if [[ "$USE_EPMP" == 1 ]] ; then
+        AT_TAB[$tab_count]="--tab=   EPMP INSTALL   !install"
+        ((tab_count++))
+        "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
+                --separator='|' --column "Set" --column "Applications:" --column  "Info" \
+                `cat "${AT_TMP_PATH}/available_app_tmp"` > "${AT_TMP_PATH}/choosed_app" 2>/dev/null &
+
+        AT_TAB[$tab_count]="--tab=   EPMP REMOVE   !install"
+        ((tab_count++))
+        "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=2\
+                --separator='|' --column "Set" --column "Applications:" \
+                `cat "${AT_TMP_PATH}/installed_app_tmp"` > "${AT_TMP_PATH}/removed_app" 2>/dev/null &
+    fi
+
     "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 \
-                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=left ${AT_TAB[@]} 2>/dev/null
+                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=bottom ${AT_TAB[@]} 2>/dev/null
     YAD_STATUS="$?"
     IFS=${old_IFS}
     [[ "$YAD_STATUS" == "1" || "$YAD_STATUS" == "252" ]] && exit 0
 
     AT_PLUGINS=""
     while read GET_PLUGINS ; do
-        DEL_BOOLEAN="$(echo ${GET_PLUGINS} | awk -F'|' '{print $2}'| awk '{print $1}' )"
-        if ! grep "${DEL_BOOLEAN}" "${AT_TMP_PATH}/skip_plugins" &>/dev/null ; then
-            AT_PLUGINS+="${DEL_BOOLEAN} "
+        DEL_BOOLEAN="$(echo $GET_PLUGINS | awk -F'|' '{print $2}'| awk '{print $1}' )"
+        if ! grep "$DEL_BOOLEAN" "$AT_TMP_PATH/skip_plugins" &>/dev/null ; then
+            AT_PLUGINS+="$DEL_BOOLEAN "
         fi
-    done < "${AT_TMP_PATH}/plugins"
+    done < "$AT_TMP_PATH/plugins"
 
     AT_PLUGINS_TO_DEFAULT=""
     while read SKIP_PLUGINS ; do
-        PLUGINS_SK="$(basename ${SKIP_PLUGINS})"
-        if ! grep "${PLUGINS_SK}" "${AT_TMP_PATH}/plugins" &>/dev/null ; then
-            AT_PLUGINS_TO_DEFAULT+="${PLUGINS_SK} "
+        PLUGINS_SK="$(basename $SKIP_PLUGINS)"
+        if ! grep "$PLUGINS_SK" "${AT_TMP_PATH}/plugins" &>/dev/null ; then
+            AT_PLUGINS_TO_DEFAULT+="$PLUGINS_SK "
         fi
     done < "${AT_TMP_PATH}/skip_plugins"
 
-    if [[ -z "${AT_PLUGINS}" ]] && [[ -z "${AT_PLUGINS_TO_DEFAULT}" ]] ; then
+    if [[ "$USE_EPMP" == 1 ]] ; then
+        EPMH_CHOOSED_APP=""
+        while read CHOOSED_APP ; do
+        DEL_BOOLEAN="$(echo $CHOOSED_APP | awk -F'|' '{print $2}'| awk '{print $1}' )"
+        grep "$DEL_BOOLEAN" "$AT_TMP_PATH/installed_app" &>/dev/null
+        [[ "$?" != 0 ]] && EPMH_CHOOSED_APP+="$DEL_BOOLEAN "
+        done < "$AT_TMP_PATH/choosed_app"
+
+        EPMH_REMOVED_APP=""
+        while read REMOVED_APP ; do
+            DEL_BOOLEAN="$(echo $REMOVED_APP | awk -F'|' '{print $2}'| awk '{print $1}' )"
+            EPMH_REMOVED_APP+="$DEL_BOOLEAN "
+        done < "$AT_TMP_PATH/removed_app"
+    fi
+
+    if [[ -z "$AT_PLUGINS" ]] && [[ -z "$AT_PLUGINS_TO_DEFAULT" ]] \
+    && [[ -z "$EPMH_CHOOSED_APP" ]] && [[ -z "$EPMH_REMOVED_APP" ]]
+    then
         echo "Nothing to do... Exit."
         exit 0
     fi
 
-    if [[ -n "${AT_PLUGINS}" ]] ; then
-        for START_AT_FUNCTIONS in ${AT_PLUGINS} ; do
-            . "$(find "${AT_PLUGINS_PATH}" -type f -name "${START_AT_FUNCTIONS}")"
-            at_plugin_function && print_not_used "Applide: ${START_AT_FUNCTIONS}... OK."
+    if [[ -n "$AT_PLUGINS" ]] ; then
+        for START_AT_FUNCTIONS in $AT_PLUGINS ; do
+            . "$(find "$AT_PLUGINS_PATH" -type f -name "$START_AT_FUNCTIONS")"
+            at_plugin_function && print_not_used "Applide: $START_AT_FUNCTIONS... OK."
         done
         echo "Done."
     fi
 
-    if [[ -n "${AT_PLUGINS_TO_DEFAULT}" ]] ; then
-        for RESTART_AT_FUNCTIONS in ${AT_PLUGINS_TO_DEFAULT} ; do
-            . "$(find "${AT_PLUGINS_PATH}" -type f -name "${RESTART_AT_FUNCTIONS}")"
-            at_plugin_restore_to_default && print_in_use "Restore to default: ${RESTART_AT_FUNCTIONS}... OK."
+    if [[ -n "$AT_PLUGINS_TO_DEFAULT" ]] ; then
+        for RESTART_AT_FUNCTIONS in $AT_PLUGINS_TO_DEFAULT ; do
+            . "$(find "$AT_PLUGINS_PATH" -type f -name "$RESTART_AT_FUNCTIONS")"
+            at_plugin_restore_to_default && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK."
         done
         echo "Done."
     fi
+
+    [[ -n "$EPMH_CHOOSED_APP" ]] && epmp $EPMH_CHOOSED_APP
+    [[ -n "$EPMH_REMOVED_APP" ]] && epmp --remove $EPMH_REMOVED_APP
 }
 
 list_plugins () {
@@ -134,10 +194,18 @@ at_def_restore () {
 check_plugins
 
 case "$1" in
-    --gui|gui) use_from_gui ;;
     --list|list|-l|l|--help|help|-h|h) list_plugins ;;
     --default|default|--restore|restore|-r|r) at_def_restore "$2" ;;
-    *) [[ -n "$1" ]] && cli_alt_tune "$1" || use_from_gui ;;
+    *)
+        if [[ -n "$1" ]] ; then
+            cli_alt_tune "$1"
+        else
+            if [[ "$USE_EPMP" == 1 ]] && command -v epmp &>/dev/null
+            then check_epm_play_app
+            else USE_EPMP=0
+            fi
+            use_from_gui
+        fi ;;
 esac
 
 exit 0
