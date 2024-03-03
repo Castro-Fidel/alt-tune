@@ -68,6 +68,22 @@ ntf() {
     notify-send -a ALT_TUNE -i ximperlinux "$1"
 }
 
+sslk() {
+    gsettings set org.gnome.desktop.wm.keybindings switch-input-source "$1"
+}
+
+ck() {
+    gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "['']"
+    sslk "['']"
+    gsettings set org.gnome.desktop.input-sources xkb-options "['']"
+}
+
+clear_gpu_cache() {
+    find ~/.config -type d -name 'GPUCache' -print0 | xargs -0 -I '{}' rm -fr '{}'
+}
+
+export -f clear_gpu_cache
+
 check_epm_play_app () {
     echo "Check available epm play applications..."
     epmp </dev/null 1> "${AT_TMP_PATH}/available_app"
@@ -139,8 +155,30 @@ use_from_gui () {
                 `cat "${AT_TMP_PATH}/installed_app_tmp"` > "${AT_TMP_PATH}/removed_app" 2>/dev/null &
     fi
 
-    "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 \
-                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=bottom ${AT_TAB[@]} 2>/dev/null
+    AT_TAB[$tab_count]="--tab=   Other toys   !ximperlinux"
+    ((tab_count++))
+
+    if [[ "$XDG_SESSION_DESKTOP" == *gnome* ]]; then
+        gnomeargs=(
+            --field="Выберите сочетание клавиш:CB" \
+            ""\!"<Ctrl>Shift_L"\!"<Super>space"\!"<Alt>Shift_L"\!"CapsLock"
+        )
+    fi
+
+    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count -scroll --focus-field=2 --form --separator="," \
+    --field="
+    Сбросить кеш GPU!!(Помогает при артефактах в браузерах)
+    :FBTN" \
+        "bash -c 'clear_gpu_cache'" \
+    \
+    "${gnomeargs[@]}" \
+    > "${AT_TMP_PATH}/toys" &
+        
+    TXT="<b>$(epm print info --pretty)</b>"
+
+
+    "${AT_YAD}" --key=$AT_RANDOM --text=$TXT --notebook --borders=3 --width=1000 --height=200 \
+                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=left "${AT_TAB[@]}" 2>/dev/null
     YAD_STATUS="$?"
     IFS=${old_IFS}
     [[ "$YAD_STATUS" == "1" || "$YAD_STATUS" == "252" ]] && exit 0
@@ -175,9 +213,19 @@ use_from_gui () {
             EPMH_REMOVED_APP+="$DEL_BOOLEAN "
         done < "$AT_TMP_PATH/removed_app"
     fi
+    
+        while read line; do
+            btnresult=$(echo $line | awk -F',' '{print $1}')
+        if [[ "$XDG_SESSION_DESKTOP" == *gnome* ]]; then
+            layout=$(echo $line | awk -F',' '{print $2}')
+        fi
+
+        done < "${AT_TMP_PATH}"/toys
+
+        echo "$layout"
 
     if [[ -z "$AT_PLUGINS" ]] && [[ -z "$AT_PLUGINS_TO_DEFAULT" ]] \
-    && [[ -z "$EPMH_CHOOSED_APP" ]] && [[ -z "$EPMH_REMOVED_APP" ]]
+    && [[ -z "$EPMH_CHOOSED_APP" ]] && [[ -z "$EPMH_REMOVED_APP" ]] && [[ -z "$layout" ]]
     then
         echo "Nothing to do... Exit."
         exit 0
@@ -197,6 +245,25 @@ use_from_gui () {
             ( pkexecdo $AT_SCRIPTS_PATH/alt-tune -r $RESTART_AT_FUNCTIONS  && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK." ) | yad_log
         done
         echo "Done."
+    fi
+
+
+    if [[ -n "$layout" ]]; then
+    ck
+    case "$layout" in
+        "<Alt>Shift_L")
+        sslk "['$layout', '<Shift>Alt_L']"
+        ;;
+        "<Ctrl>Shift_L")
+        sslk "['<Shift>Control_L', '<Ctrl>Shift_L']"
+        ;;
+        "CapsLock")
+        gsettings set org.gnome.desktop.input-sources xkb-options "['grp:caps_toggle']"
+        ;;
+        *)
+        sslk "['$layout']"
+        ;;
+    esac
     fi
 
     [[ -n "$EPMH_CHOOSED_APP" ]] && pkexecdo epmp --auto "$EPMH_CHOOSED_APP" | yad_log
