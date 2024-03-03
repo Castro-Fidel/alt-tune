@@ -23,7 +23,7 @@ AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
 AT_YAD=yad
 AT_RANDOM="${RANDOM}"
 AT_LINE_SEPARATOR="------------------------------------------------------------------------"
-AT_SORT_TAB=('FOR_GAMES' 'AMD' 'NVIDIA' 'KDE')
+AT_SORT_TAB=('FOR_GAMES' 'KDE')
 
 print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
 print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
