@@ -25,9 +25,9 @@ AT_RANDOM="${RANDOM}"
 AT_LINE_SEPARATOR="------------------------------------------------------------------------"
 AT_SORT_TAB=('FOR_GAMES' 'KDE')
 
-print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
-print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
-print_not_used () { printf "\E[35m%s $@ %s\e[0m\n" ;}
+print_warn () { printf "\E[33m%s $* %s\e[0m\n" ;}
+print_in_use () { printf "\E[36m%s $* %s\e[0m\n"  ;}
+print_not_used () { printf "\E[35m%s $* %s\e[0m\n" ;}
 
 check_epm_play_app () {
     echo "Check available epm play applications..."
@@ -55,7 +55,7 @@ check_epm_play_app () {
 check_plugins () {
     PLUGINS_TO_GUI=""
     touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
-    for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
+    for GREP_PLUGINS_PATH in $(ls "${AT_PLUGINS_PATH}") ; do
         [[ ! -d "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}" ]] && continue
         [[ -z "$(ls "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/")" ]] && continue
         for GREP_PLUGINS in "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/"* ; do
@@ -77,8 +77,8 @@ use_from_gui () {
     [[ -z "$(which yad)" ]] && echo 'You need to intsall "yad" in your system.' && exit 1
     old_IFS=$IFS && IFS=$'|'
     local tab_count=0
-    for ptab in ${AT_SORT_TAB[@]} ; do
-        local AT_TAB[$tab_count]="--tab=   $(echo $ptab | sed 's/_/ /')   !settings"
+    for ptab in "${AT_SORT_TAB[@]}" ; do
+        local AT_TAB[$tab_count]="--tab=   $(echo $ptab | sed 's/_/ /')   !$AT_ICON"
         ((tab_count++))
         PLUGINS_FOR_TO_GUI=PLUGINS_${ptab}_TO_GUI
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
@@ -87,13 +87,13 @@ use_from_gui () {
     done
 
     if [[ "$USE_EPMP" == 1 ]] ; then
-        AT_TAB[$tab_count]="--tab=   EPMP INSTALL   !install"
+        AT_TAB[$tab_count]="--tab=   EPMP INSTALL   !x-package-repository"
         ((tab_count++))
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
                 --separator='|' --column "Set" --column "Applications:" --column  "Info" \
                 `cat "${AT_TMP_PATH}/available_app_tmp"` > "${AT_TMP_PATH}/choosed_app" 2>/dev/null &
 
-        AT_TAB[$tab_count]="--tab=   EPMP REMOVE   !install"
+        AT_TAB[$tab_count]="--tab=   EPMP REMOVE   !x-package-repository"
         ((tab_count++))
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=2\
                 --separator='|' --column "Set" --column "Applications:" \
