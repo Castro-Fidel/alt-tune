@@ -54,7 +54,7 @@ pkexecdo() {
                 ntf_error "Действие прервано пользователем."
                 ;;
             *)
-                ntf_error "Пакет не установлен."
+                ntf_error "Действие не выполнено."
                 ;; 
         esac
         exit 1
@@ -65,7 +65,7 @@ ntf_error() {
 }
 
 ntf() {
-    notify-send -a ALT_TUNE -i ximperlinux "$1"
+    notify-send -a ALT_TUNE -i "$AT_ICON" "$1"
 }
 
 sslk() {
@@ -155,7 +155,7 @@ use_from_gui () {
                 `cat "${AT_TMP_PATH}/installed_app_tmp"` > "${AT_TMP_PATH}/removed_app" 2>/dev/null &
     fi
 
-    AT_TAB[$tab_count]="--tab=   Other toys   !ximperlinux"
+    AT_TAB[$tab_count]="--tab=   Other toys   !$AT_ICON"
     ((tab_count++))
 
     if [[ "$XDG_SESSION_DESKTOP" == *gnome* ]]; then
