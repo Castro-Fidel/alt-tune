@@ -5,11 +5,11 @@ AT_PLUGIN_INFO="Отключить поддержку UMIP. (Необходим�
 таких как Overwatch и Hogwards Legacy на процессорах Ryzen 3xxx и выше)"
 
 at_plugin_check () {
-    grep "clearcpuid=514" /etc/default/grub &>/dev/null && return 0 || return 1
+    grep "clearcpuid=514" /etc/sysconfig/grub2 &>/dev/null && return 0 || return 1
 }
 
 at_plugin_function () {
-    if sed -i 's/GRUB_CMDLINE_LINUX_DEFAULT="/GRUB_CMDLINE_LINUX_DEFAULT="clearcpuid=514 /' /etc/default/grub ; then
+    if sed -i 's/splash/splash clearcpuid=514/' /etc/sysconfig/grub2 ; then
         update-grub
         return 0
     else
@@ -18,7 +18,7 @@ at_plugin_function () {
 }
 
 at_plugin_restore_to_default () {
-    if sed -i 's/clearcpuid=514 //' /etc/default/grub ; then
+    if sed -i 's/ clearcpuid=514//' /etc/sysconfig/grub2 ; then
         update-grub
         return 0
     else

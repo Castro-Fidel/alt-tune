@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-[[ "$(id -u)" -ne 0 ]] && echo 'This script must be run as root!' && exit 1
 
 AT_TMP_PATH=$(mktemp -d)
 cleanup() {
@@ -24,11 +23,66 @@ AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
 AT_YAD=yad
 AT_RANDOM="${RANDOM}"
 AT_LINE_SEPARATOR="------------------------------------------------------------------------"
-AT_SORT_TAB=('FOR_GAMES' 'AMD' 'NVIDIA' 'KDE')
+AT_SORT_TAB=('FOR_GAMES' 'KDE')
 
-print_warn () { printf "\E[33m%s $@ %s\e[0m\n" ;}
-print_in_use () { printf "\E[36m%s $@ %s\e[0m\n"  ;}
-print_not_used () { printf "\E[35m%s $@ %s\e[0m\n" ;}
+print_warn () { printf "\E[33m%s $* %s\e[0m\n" ;}
+print_in_use () { printf "\E[36m%s $* %s\e[0m\n"  ;}
+print_not_used () { printf "\E[35m%s $* %s\e[0m\n" ;}
+
+# Окно с логом с помощью yad
+yad_log () {
+    sed -u 's/^/# /' | \
+    $AT_YAD --title="Лог" --enable-log="Лог" --log-expanded --log-on-top \
+    --auto-kill --auto-close --progress \
+    --width=800 --height=500
+}
+
+pkexecdo() {
+    pkexec "$@" 2>&1
+        exit_code=$?
+
+        case $exit_code in
+            0)
+                ntf "Команда завершилась успешно"
+                exit 0
+                ;;
+            100)
+                ntf_error "Команда завершилась с ошибкой."
+                ;;
+
+            126)
+                ntf_error "Действие прервано пользователем."
+                ;;
+            *)
+                ntf_error "Действие не выполнено."
+                ;; 
+        esac
+        exit 1
+}
+
+ntf_error() {
+    notify-send -a ALT_TUNE -i error "$1"
+}
+
+ntf() {
+    notify-send -a ALT_TUNE -i "$AT_ICON" "$1"
+}
+
+sslk() {
+    gsettings set org.gnome.desktop.wm.keybindings switch-input-source "$1"
+}
+
+ck() {
+    gsettings set org.gnome.desktop.wm.keybindings switch-input-source-backward "['']"
+    sslk "['']"
+    gsettings set org.gnome.desktop.input-sources xkb-options "['']"
+}
+
+clear_gpu_cache() {
+    find ~/.config -type d -name 'GPUCache' -print0 | xargs -0 -I '{}' rm -fr '{}'
+}
+
+export -f clear_gpu_cache
 
 check_epm_play_app () {
     echo "Check available epm play applications..."
@@ -56,7 +110,7 @@ check_epm_play_app () {
 check_plugins () {
     PLUGINS_TO_GUI=""
     touch "${AT_TMP_PATH}/skip_plugins" "${AT_TMP_PATH}/list_plugins"
-    for GREP_PLUGINS_PATH in $(ls ${AT_PLUGINS_PATH}) ; do
+    for GREP_PLUGINS_PATH in $(ls "${AT_PLUGINS_PATH}") ; do
         [[ ! -d "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}" ]] && continue
         [[ -z "$(ls "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/")" ]] && continue
         for GREP_PLUGINS in "${AT_PLUGINS_PATH}/${GREP_PLUGINS_PATH}/"* ; do
@@ -78,8 +132,8 @@ use_from_gui () {
     [[ -z "$(which yad)" ]] && echo 'You need to intsall "yad" in your system.' && exit 1
     old_IFS=$IFS && IFS=$'|'
     local tab_count=0
-    for ptab in ${AT_SORT_TAB[@]} ; do
-        local AT_TAB[$tab_count]="--tab=   $(echo $ptab | sed 's/_/ /')   !settings"
+    for ptab in "${AT_SORT_TAB[@]}" ; do
+        local AT_TAB[$tab_count]="--tab=   $(echo $ptab | sed 's/_/ /')   !$AT_ICON"
         ((tab_count++))
         PLUGINS_FOR_TO_GUI=PLUGINS_${ptab}_TO_GUI
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
@@ -88,21 +142,43 @@ use_from_gui () {
     done
 
     if [[ "$USE_EPMP" == 1 ]] ; then
-        AT_TAB[$tab_count]="--tab=   EPMP INSTALL   !install"
+        AT_TAB[$tab_count]="--tab=   EPMP INSTALL   !x-package-repository"
         ((tab_count++))
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=3\
                 --separator='|' --column "Set" --column "Applications:" --column  "Info" \
                 `cat "${AT_TMP_PATH}/available_app_tmp"` > "${AT_TMP_PATH}/choosed_app" 2>/dev/null &
 
-        AT_TAB[$tab_count]="--tab=   EPMP REMOVE   !install"
+        AT_TAB[$tab_count]="--tab=   EPMP REMOVE   !x-package-repository"
         ((tab_count++))
         "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count --list --checklist --search-column=2\
                 --separator='|' --column "Set" --column "Applications:" \
                 `cat "${AT_TMP_PATH}/installed_app_tmp"` > "${AT_TMP_PATH}/removed_app" 2>/dev/null &
     fi
 
-    "${AT_YAD}" --key=$AT_RANDOM --notebook --borders=3 --width=1400 --height=800 \
-                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=bottom ${AT_TAB[@]} 2>/dev/null
+    AT_TAB[$tab_count]="--tab=   Other toys   !$AT_ICON"
+    ((tab_count++))
+
+    if [[ "$XDG_SESSION_DESKTOP" == *gnome* ]]; then
+        gnomeargs=(
+            --field="Выберите сочетание клавиш:CB" \
+            ""\!"<Ctrl>Shift_L"\!"<Super>space"\!"<Alt>Shift_L"\!"CapsLock"
+        )
+    fi
+
+    "${AT_YAD}" --plug="$AT_RANDOM" --tabnum=$tab_count -scroll --focus-field=2 --form --separator="," \
+    --field="
+    Сбросить кеш GPU!!(Помогает при артефактах в браузерах)
+    :FBTN" \
+        "bash -c 'clear_gpu_cache'" \
+    \
+    "${gnomeargs[@]}" \
+    > "${AT_TMP_PATH}/toys" &
+        
+    TXT="<b>$(epm print info --pretty)</b>"
+
+
+    "${AT_YAD}" --key=$AT_RANDOM --text=$TXT --notebook --borders=3 --width=1000 --height=200 \
+                --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=left "${AT_TAB[@]}" 2>/dev/null
     YAD_STATUS="$?"
     IFS=${old_IFS}
     [[ "$YAD_STATUS" == "1" || "$YAD_STATUS" == "252" ]] && exit 0
@@ -137,9 +213,19 @@ use_from_gui () {
             EPMH_REMOVED_APP+="$DEL_BOOLEAN "
         done < "$AT_TMP_PATH/removed_app"
     fi
+    
+        while read line; do
+            btnresult=$(echo $line | awk -F',' '{print $1}')
+        if [[ "$XDG_SESSION_DESKTOP" == *gnome* ]]; then
+            layout=$(echo $line | awk -F',' '{print $2}')
+        fi
+
+        done < "${AT_TMP_PATH}"/toys
+
+        echo "$layout"
 
     if [[ -z "$AT_PLUGINS" ]] && [[ -z "$AT_PLUGINS_TO_DEFAULT" ]] \
-    && [[ -z "$EPMH_CHOOSED_APP" ]] && [[ -z "$EPMH_REMOVED_APP" ]]
+    && [[ -z "$EPMH_CHOOSED_APP" ]] && [[ -z "$EPMH_REMOVED_APP" ]] && [[ -z "$layout" ]]
     then
         echo "Nothing to do... Exit."
         exit 0
@@ -148,7 +234,7 @@ use_from_gui () {
     if [[ -n "$AT_PLUGINS" ]] ; then
         for START_AT_FUNCTIONS in $AT_PLUGINS ; do
             . "$(find "$AT_PLUGINS_PATH" -type f -name "$START_AT_FUNCTIONS")"
-            at_plugin_function && print_not_used "Applide: $START_AT_FUNCTIONS... OK."
+            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune $START_AT_FUNCTIONS && print_not_used "Applide: $START_AT_FUNCTIONS... OK." ) | yad_log
         done
         echo "Done."
     fi
@@ -156,13 +242,32 @@ use_from_gui () {
     if [[ -n "$AT_PLUGINS_TO_DEFAULT" ]] ; then
         for RESTART_AT_FUNCTIONS in $AT_PLUGINS_TO_DEFAULT ; do
             . "$(find "$AT_PLUGINS_PATH" -type f -name "$RESTART_AT_FUNCTIONS")"
-            at_plugin_restore_to_default && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK."
+            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune -r $RESTART_AT_FUNCTIONS  && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK." ) | yad_log
         done
         echo "Done."
     fi
 
-    [[ -n "$EPMH_CHOOSED_APP" ]] && epmp $EPMH_CHOOSED_APP
-    [[ -n "$EPMH_REMOVED_APP" ]] && epmp --remove $EPMH_REMOVED_APP
+
+    if [[ -n "$layout" ]]; then
+    ck
+    case "$layout" in
+        "<Alt>Shift_L")
+        sslk "['$layout', '<Shift>Alt_L']"
+        ;;
+        "<Ctrl>Shift_L")
+        sslk "['<Shift>Control_L', '<Ctrl>Shift_L']"
+        ;;
+        "CapsLock")
+        gsettings set org.gnome.desktop.input-sources xkb-options "['grp:caps_toggle']"
+        ;;
+        *)
+        sslk "['$layout']"
+        ;;
+    esac
+    fi
+
+    [[ -n "$EPMH_CHOOSED_APP" ]] && pkexecdo epmp --auto "$EPMH_CHOOSED_APP" | yad_log
+    [[ -n "$EPMH_REMOVED_APP" ]] && pkexecdo epmp --auto --remove "$EPMH_REMOVED_APP" | yad_log
 }
 
 list_plugins () {
@@ -201,7 +306,7 @@ case "$1" in
             cli_alt_tune "$1"
         else
             if [[ "$USE_EPMP" == 1 ]] && command -v epmp &>/dev/null
-            then check_epm_play_app
+            then check_epm_play_app | yad_log
             else USE_EPMP=0
             fi
             use_from_gui
