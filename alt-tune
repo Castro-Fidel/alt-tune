@@ -33,6 +33,9 @@ AT_RANDOM="${RANDOM}"
 AT_LINE_SEPARATOR="------------------------------------------------------------------------"
 AT_SORT_TAB=('FOR_GAMES' 'KDE')
 
+AT_LOG_FILE="$AT_TMP_PATH/yad_log"
+add_to_log () { tee -a "$AT_LOG_FILE" ;}
+
 print_warn () {
     if pgrep -a "$AT_YAD" | grep "$AT_YAD --key=$KEY_YAD_LOG_UP" &>/dev/null
     then echo "$*"
@@ -56,7 +59,7 @@ print_not_used () {
 
 # Окно с логом с помощью yad
 yad_log () {
-    echo "$@" > "$AT_TMP_PATH/yad_log"
+    echo "$@" > "$AT_LOG_FILE"
     export KEY_YAD_LOG_UP="${RANDOM}"
     YAD_WAIT=0
     while read -r line \
@@ -68,14 +71,14 @@ yad_log () {
             sleep 1
             YAD_WAIT=1
         fi
-    done < "$AT_TMP_PATH/yad_log" | "$AT_YAD" --key=$KEY_YAD_LOG_UP --text-info --tail \
+    done < "$AT_LOG_FILE" | "$AT_YAD" --key=$KEY_YAD_LOG_UP --text-info --tail \
     --no-buttons --center --auto-close --skip-taskbar --title "LOG" --window-icon="${AT_ICON}"\
     --width=$AT_SIZE_X --height=$AT_SIZE_Y &>/dev/null &
     export YAD_LOG_PID="$!"
 }
 
 stop_yad_log () {
-    echo "$@" >> "$AT_TMP_PATH/yad_log"
+    echo "$@" >> "$AT_LOG_FILE"
     sleep 2
     kill -s SIGUSR1 "$YAD_LOG_PID" &>/dev/null
 }
@@ -259,7 +262,7 @@ use_from_gui () {
     if [[ -z "$AT_PLUGINS" ]] && [[ -z "$AT_PLUGINS_TO_DEFAULT" ]] \
     && [[ -z "$EPMH_CHOOSED_APP" ]] && [[ -z "$EPMH_REMOVED_APP" ]] && [[ -z "$layout" ]]
     then
-        echo "Nothing to do... Exit." | tee -a "$AT_TMP_PATH/yad_log"
+        echo "Nothing to do... Exit." | add_to_log
         stop_yad_log " "
         exit 0
     fi
@@ -267,17 +270,17 @@ use_from_gui () {
     if [[ -n "$AT_PLUGINS" ]] ; then
         for START_AT_FUNCTIONS in $AT_PLUGINS ; do
             . "$(find "$AT_PLUGINS_PATH" -type f -name "$START_AT_FUNCTIONS")"
-            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune $START_AT_FUNCTIONS && print_not_used "Applide: $START_AT_FUNCTIONS... OK." ) | tee -a "$AT_TMP_PATH/yad_log"
+            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune $START_AT_FUNCTIONS && print_not_used "Applide: $START_AT_FUNCTIONS... OK." ) | add_to_log
         done
-        echo "Done." | tee -a "$AT_TMP_PATH/yad_log"
+        echo "Done." | add_to_log
     fi
 
     if [[ -n "$AT_PLUGINS_TO_DEFAULT" ]] ; then
         for RESTART_AT_FUNCTIONS in $AT_PLUGINS_TO_DEFAULT ; do
             . "$(find "$AT_PLUGINS_PATH" -type f -name "$RESTART_AT_FUNCTIONS")"
-            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune -r $RESTART_AT_FUNCTIONS  && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK." ) | tee -a "$AT_TMP_PATH/yad_log"
+            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune -r $RESTART_AT_FUNCTIONS  && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK." ) | add_to_log
         done
-        echo "Done." | tee -a "$AT_TMP_PATH/yad_log"
+        echo "Done." | add_to_log
     fi
 
 
@@ -299,8 +302,8 @@ use_from_gui () {
     esac
     fi
 
-    [[ -n "$EPMH_CHOOSED_APP" ]] && pkexecdo epmp --auto "$EPMH_CHOOSED_APP" | tee -a "$AT_TMP_PATH/yad_log"
-    [[ -n "$EPMH_REMOVED_APP" ]] && pkexecdo epmp --auto --remove "$EPMH_REMOVED_APP" | tee -a "$AT_TMP_PATH/yad_log"
+    [[ -n "$EPMH_CHOOSED_APP" ]] && pkexecdo epmp --auto "$EPMH_CHOOSED_APP" | add_to_log
+    [[ -n "$EPMH_REMOVED_APP" ]] && pkexecdo epmp --auto --remove "$EPMH_REMOVED_APP" | add_to_log
 
     stop_yad_log "Exiting from Alt Tune..."
 }
@@ -344,7 +347,7 @@ case "$1" in
             && command -v epmp &>/dev/null
             then
                 yad_log "Cheking epm play applications..."
-                check_epm_play_app | tee -a "$AT_TMP_PATH/yad_log"
+                check_epm_play_app | add_to_log
                 stop_yad_log "Starting ALT Tune..."
             else
                 USE_EPMP=0
