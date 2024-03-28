@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+unset ROOT_IN_USE
+if [[ $(id -u) -eq 0 ]]
+then ROOT_IN_USE=1
+else ROOT_IN_USE=0
+fi
+
 AT_TMP_PATH=$(mktemp -d)
 cleanup() {
     # echo "Removing the temporary directory: $AT_TMP_PATH"
@@ -21,6 +27,8 @@ AT_SCRIPTS_PATH="$(dirname $(readlink -f "$0"))"
 AT_PLUGINS_PATH="${AT_SCRIPTS_PATH}/alt-tune-plugins"
 AT_ICON="${AT_SCRIPTS_PATH}/alt-tune.png"
 AT_YAD=yad
+AT_SIZE_X=800
+AT_SIZE_Y=600
 AT_RANDOM="${RANDOM}"
 AT_LINE_SEPARATOR="------------------------------------------------------------------------"
 AT_SORT_TAB=('FOR_GAMES' 'KDE')
@@ -31,41 +39,44 @@ print_not_used () { printf "\E[35m%s $* %s\e[0m\n" ;}
 
 # Окно с логом с помощью yad
 yad_log () {
-    sed -u 's/^/# /' | \
-    $AT_YAD --title="Лог" --enable-log="Лог" --log-expanded --log-on-top \
-    --auto-kill --auto-close --progress \
-    --width=800 --height=500
+    echo "Starting..." > "$AT_TMP_PATH/yad_log"
+    KEY_YAD_LOG_UP="${RANDOM}"
+    YAD_WAIT=0
+    while read -r line \
+    || pgrep -a "$AT_YAD" | grep "$AT_YAD --key=$KEY_YAD_LOG_UP" &>/dev/null
+    do
+        sleep 0.005
+        [[ ! -z "${line}" ]] && echo "# ${line}"
+        if [[ "${YAD_WAIT}" != 1 ]] ; then
+            sleep 1
+            YAD_WAIT=1
+        fi
+    done < "$AT_TMP_PATH/yad_log" | "$AT_YAD" --key=$KEY_YAD_LOG_UP --text-info --tail \
+    --no-buttons --center --auto-close --skip-taskbar --title "LOG" --window-icon="${AT_ICON}"\
+    --width=$AT_SIZE_X --height=$AT_SIZE_Y &>/dev/null &
+    export YAD_LOG_PID="$!"
+}
+
+stop_yad_log () {
+    echo "Exiting..." >> "$AT_TMP_PATH/yad_log"
+    sleep 1
+    kill -s SIGUSR1 "$YAD_LOG_PID" &>/dev/null
 }
 
 pkexecdo() {
     pkexec "$@" 2>&1
-        exit_code=$?
-
-        case $exit_code in
-            0)
-                ntf "Команда завершилась успешно"
-                exit 0
-                ;;
-            100)
-                ntf_error "Команда завершилась с ошибкой."
-                ;;
-
-            126)
-                ntf_error "Действие прервано пользователем."
-                ;;
-            *)
-                ntf_error "Действие не выполнено."
-                ;; 
-        esac
-        exit 1
-}
-
-ntf_error() {
-    notify-send -a ALT_TUNE -i error "$1"
-}
-
-ntf() {
-    notify-send -a ALT_TUNE -i "$AT_ICON" "$1"
+    local exit_code=$?
+    local at_notify_send "notify-send -a ALT_TUNE"
+    case $exit_code in
+        0)
+            $at_notify_send -i "$AT_ICON" "Команда завершилась успешно"
+            return 0
+            ;;
+        100) $at_notify_send -i error "Команда завершилась с ошибкой." ;;
+        126) $at_notify_send -i error "Действие прервано пользователем." ;;
+          *) $at_notify_send -i error "Действие не выполнено." ;;
+    esac
+    return 1
 }
 
 sslk() {
@@ -173,11 +184,14 @@ use_from_gui () {
     \
     "${gnomeargs[@]}" \
     > "${AT_TMP_PATH}/toys" &
-        
-    TXT="<b>$(epm print info --pretty)</b>"
 
+    if [[ "$USE_EPMP" == 1 ]] ; then
+        TXT="<b>$(epm print info --pretty)</b>"
+    else
+        TXT=""
+    fi
 
-    "${AT_YAD}" --key=$AT_RANDOM --text=$TXT --notebook --borders=3 --width=1000 --height=200 \
+    "${AT_YAD}" --key=$AT_RANDOM --text=$TXT --notebook --borders=3 --width=$AT_SIZE_X --height=$AT_SIZE_Y --text-align=left \
                 --title "Alt Tune" --window-icon="${AT_ICON}" --tab-pos=left "${AT_TAB[@]}" 2>/dev/null
     YAD_STATUS="$?"
     IFS=${old_IFS}
@@ -234,7 +248,7 @@ use_from_gui () {
     if [[ -n "$AT_PLUGINS" ]] ; then
         for START_AT_FUNCTIONS in $AT_PLUGINS ; do
             . "$(find "$AT_PLUGINS_PATH" -type f -name "$START_AT_FUNCTIONS")"
-            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune $START_AT_FUNCTIONS && print_not_used "Applide: $START_AT_FUNCTIONS... OK." ) | yad_log
+            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune $START_AT_FUNCTIONS && print_not_used "Applide: $START_AT_FUNCTIONS... OK." ) | tee -a "$AT_TMP_PATH/yad_log"
         done
         echo "Done."
     fi
@@ -242,7 +256,7 @@ use_from_gui () {
     if [[ -n "$AT_PLUGINS_TO_DEFAULT" ]] ; then
         for RESTART_AT_FUNCTIONS in $AT_PLUGINS_TO_DEFAULT ; do
             . "$(find "$AT_PLUGINS_PATH" -type f -name "$RESTART_AT_FUNCTIONS")"
-            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune -r $RESTART_AT_FUNCTIONS  && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK." ) | yad_log
+            ( pkexecdo $AT_SCRIPTS_PATH/alt-tune -r $RESTART_AT_FUNCTIONS  && print_in_use "Restore to default: $RESTART_AT_FUNCTIONS... OK." ) | tee -a "$AT_TMP_PATH/yad_log"
         done
         echo "Done."
     fi
@@ -266,8 +280,8 @@ use_from_gui () {
     esac
     fi
 
-    [[ -n "$EPMH_CHOOSED_APP" ]] && pkexecdo epmp --auto "$EPMH_CHOOSED_APP" | yad_log
-    [[ -n "$EPMH_REMOVED_APP" ]] && pkexecdo epmp --auto --remove "$EPMH_REMOVED_APP" | yad_log
+    [[ -n "$EPMH_CHOOSED_APP" ]] && pkexecdo epmp --auto "$EPMH_CHOOSED_APP" | tee -a "$AT_TMP_PATH/yad_log"
+    [[ -n "$EPMH_REMOVED_APP" ]] && pkexecdo epmp --auto --remove "$EPMH_REMOVED_APP" | tee -a "$AT_TMP_PATH/yad_log"
 }
 
 list_plugins () {
@@ -305,11 +319,13 @@ case "$1" in
         if [[ -n "$1" ]] ; then
             cli_alt_tune "$1"
         else
+            yad_log
             if [[ "$USE_EPMP" == 1 ]] && command -v epmp &>/dev/null
-            then check_epm_play_app | yad_log
+            then check_epm_play_app | tee -a "$AT_TMP_PATH/yad_log"
             else USE_EPMP=0
             fi
             use_from_gui
+            stop_yad_log
         fi ;;
 esac
 
